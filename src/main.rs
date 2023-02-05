@@ -118,7 +118,7 @@ pub fn get_latest_record_by_pk_and_key(key: String, public_key: String) -> FdbDh
 /************************ *********************/
 
 pub fn get_connection(db_name: &str) -> Connection {
-    let path = format!("tmp/'{}'_db.sqlite", db_name);
+    let path = format!("tmp/{}_db.sqlite", db_name);
     Connection::open(&path).unwrap()
 }
 
@@ -196,8 +196,8 @@ pub fn update_record(
     conn.execute(format!(
         "
       update dht
-      set name = '{}'
-      set cid = '{}'
+      set name = '{}',
+      cid = '{}'
       where owner_pk = '{}' AND key = '{}';
       ",
         name, cid, owner_pk, key
