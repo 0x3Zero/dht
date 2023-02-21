@@ -2,6 +2,7 @@
 
 mod dht;
 mod ed25519;
+mod secp256k1;
 mod record;
 mod result;
 
@@ -10,7 +11,8 @@ use marine_rs_sdk::module_manifest;
 use marine_rs_sdk::WasmLoggerBuilder;
 
 use dht::FdbDht;
-use ed25519::verify;
+use ed25519::{verify as verify_ed25519};
+use secp256k1::{verify as verify_secp256k1};
 use marine_sqlite_connector::{Connection, Error, Result};
 use record::Record;
 use result::FdbResult;
@@ -18,12 +20,25 @@ use result::FdbResult;
 module_manifest!();
 
 const DEFAULT_PATH: &str = "dht";
+const DEFAULT_ENC: &str = "secp256k1";
 
 pub fn main() {
     WasmLoggerBuilder::new()
         .with_log_level(log::LevelFilter::Info)
         .build()
         .unwrap();
+}
+
+#[marine]
+pub fn verify_signature(public_key: String, signature: String, message: String, enc: String) -> bool{
+  let verify: bool;
+  if enc.is_empty() || enc == DEFAULT_ENC {
+    verify = verify_secp256k1(public_key.clone(), signature, message);
+  } else {
+    verify = verify_ed25519(public_key.clone(), signature, message);
+  }
+
+  verify
 }
 
 #[marine]
@@ -48,8 +63,19 @@ pub fn insert(
     public_key: String,
     signature: String,
     message: String,
+    enc: String,
 ) -> FdbResult {
-    let verify = verify(public_key.clone(), signature, message);
+  
+    let verify: bool;
+    let enc_verify: String;
+
+    if enc.is_empty() || enc == DEFAULT_ENC {
+      verify = verify_secp256k1(public_key.clone(), signature, message);
+      enc_verify = DEFAULT_ENC.to_string();
+    } else {
+      verify = verify_ed25519(public_key.clone(), signature, message);
+      enc_verify = enc;
+    }
 
     if !verify {
         return FdbResult::from_err_str("You are not the owner!");
@@ -58,10 +84,10 @@ pub fn insert(
     let conn = get_connection(DEFAULT_PATH);
 
     // Check if PK and key exist
-    match get_record_by_pk_and_key(&conn, key.clone(), public_key.clone()) {
+    match get_record_by_pk_key_and_name(&conn, key.clone(), public_key.clone(), name.clone()) {
         Ok(value) => {
             if value.is_none() {
-                let res = add_record(&conn, key, name, public_key, cid);
+                let res = add_record(&conn, key, name, public_key, cid, enc_verify);
                 FdbResult::from_res(res)
             } else {
                 let res = update_record(&conn, key, name, public_key, cid);
@@ -137,7 +163,8 @@ pub fn create_dht_table(conn: &Connection) -> Result<()> {
           key TEXT not null,
           name varchar(255) not null,
           cid TEXT not null,
-          owner_pk TEXT not null
+          owner_pk TEXT not null,
+          enc varchar(20) not null
       );
   ",
     )?;
@@ -161,15 +188,16 @@ pub fn add_record(
     name: String,
     owner_pk: String,
     cid: String,
+    enc: String,
 ) -> Result<()> {
     conn.execute(format!(
-        "insert into dht (key, name, cid, owner_pk) values ('{}', '{}', '{}', '{}');",
-        key, name, cid, owner_pk
+        "insert into dht (key, name, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
+        key, name, cid, owner_pk, enc
     ))?;
 
     println!(
-        "insert into dht (key, name, cid, owner_pk) values ('{}', '{}', '{}', '{}');",
-        key, name, cid, owner_pk
+        "insert into dht (key, name, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
+        key, name, cid, owner_pk, enc
     );
 
     Ok(())
@@ -262,6 +290,28 @@ pub fn get_record_by_pk_and_key(
     } else {
         Ok(None)
     }
+}
+
+pub fn get_record_by_pk_key_and_name(
+  conn: &Connection,
+  key: String,
+  pk: String,
+  name: String,
+) -> Result<Option<Record>> {
+  let mut cursor = conn
+      .prepare(format!(
+          "select * from dht where owner_pk = '{}' AND key = '{}' AND name = '{}';",
+          pk, key, name
+      ))?
+      .cursor();
+
+  let row = cursor.next()?;
+  if row != None {
+      let found_record = Record::from_row(row.unwrap());
+      Ok(Some(found_record.unwrap()))
+  } else {
+      Ok(None)
+  }
 }
 
 fn read_execute(conn: &Connection, statement: String) -> Result<Record> {
