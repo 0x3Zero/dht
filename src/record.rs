@@ -26,7 +26,7 @@ impl Record {
         let row_record = Record {
             uuid: row[0].as_integer().ok_or(get_none_error())?,
             key: row[1].as_string().ok_or(get_none_error())?.to_string(),
-            name: row[2].as_string().ok_or(get_none_error())?.to_string(),
+            name: row[2].as_string().unwrap_or_default().to_string(),
             cid: row[3].as_string().ok_or(get_none_error())?.to_string(),
             public_key: row[4].as_string().ok_or(get_none_error())?.to_string(),
             enc: row[5].as_string().ok_or(get_none_error())?.to_string(),
