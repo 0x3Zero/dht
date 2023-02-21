@@ -84,7 +84,13 @@ pub fn insert(
     let conn = get_connection(DEFAULT_PATH);
 
     // Check if PK and key exist
-    match get_record_by_pk_key_and_name(&conn, key.clone(), public_key.clone(), name.clone()) {
+    let checker;
+    if name.is_empty() {
+      checker = get_record_by_pk_and_key(&conn, key.clone(), public_key.clone());
+    } else {
+      checker = get_record_by_pk_key_and_name(&conn, key.clone(), public_key.clone(), name.clone());
+    }
+    match checker {
         Ok(value) => {
             if value.is_none() {
                 let res = add_record(&conn, key, name, public_key, cid, enc_verify);

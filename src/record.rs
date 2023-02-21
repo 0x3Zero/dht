@@ -16,6 +16,7 @@ pub struct Record {
     pub name: String,
     pub cid: String,
     pub public_key: String,
+    pub enc: String,
     pub err_msg: String,
     pub success: bool,
 }
@@ -28,6 +29,7 @@ impl Record {
             name: row[2].as_string().ok_or(get_none_error())?.to_string(),
             cid: row[3].as_string().ok_or(get_none_error())?.to_string(),
             public_key: row[4].as_string().ok_or(get_none_error())?.to_string(),
+            enc: row[5].as_string().ok_or(get_none_error())?.to_string(),
             err_msg: "".to_string(),
             success: true,
             ..Default::default()
