@@ -201,7 +201,7 @@ pub fn add_record(
         key, name, cid, owner_pk, enc
     ))?;
 
-    println!(
+    log::info!(
         "insert into dht (key, name, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
         key, name, cid, owner_pk, enc
     );

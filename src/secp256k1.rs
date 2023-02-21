@@ -41,8 +41,8 @@ pub fn verify(public_key: String, signature: String, message: String) -> bool {
   let p_key_decoded = hex::decode(public_key[2..].to_string()).unwrap();
   let sign_decoded = hex::decode(signature[2..].to_string()).unwrap();
 
-  println!("p_key_decoded: {:?}", p_key_decoded);
-  println!("sign_decoded: {:?}", &sign_decoded[..64]);
+  log::info!("p_key_decoded: {:?}", p_key_decoded);
+  log::info!("sign_decoded: {:?}", &sign_decoded[..64]);
 
   let sign: [u8; 64] = sign_decoded[..64]
       .try_into()
@@ -50,19 +50,19 @@ pub fn verify(public_key: String, signature: String, message: String) -> bool {
       
   let message_decoded = eth_message(message);
 
-  println!("message: {:?}", message_decoded);
+  log::info!("message: {:?}", message_decoded);
 
   let ctx_message = Message::parse(&message_decoded);
   let ctx_sig = Signature::parse_standard(&sign).expect("signature is valid");
   let recovery_id = sign_decoded[64] as i32;
 
-  println!("signature: {:?}", ctx_sig.serialize());
-  println!("rec_id: {}", recovery_id);
+  log::info!("signature: {:?}", ctx_sig.serialize());
+  log::info!("rec_id: {}", recovery_id);
 
   let pubkey = recover(&ctx_message, &ctx_sig, &RecoveryId::parse_rpc(recovery_id as u8).unwrap()).unwrap();
 
-  println!("pubkey: {:?}", pubkey.serialize());
-  println!("address: {:?}", public_key_to_address(pubkey.serialize()));
+  log::info!("pubkey: {:?}", pubkey.serialize());
+  log::info!("address: {:?}", public_key_to_address(pubkey.serialize()));
 
   public_key.to_lowercase() == public_key_to_address(pubkey.serialize()).to_lowercase()
 
