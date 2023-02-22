@@ -2,9 +2,9 @@ module Dht declares *
 
 data FdbDht:
   public_key: string
-  name: string
+  alias: string
   cid: string
-  key: string
+  data_key: string
 
 data FdbResult:
   success: bool
@@ -14,6 +14,6 @@ service Dht("dht"):
   get_latest_record_by_pk_and_key(key: string, public_key: string) -> FdbDht
   get_records_by_key(key: string) -> []FdbDht
   initialize() -> FdbResult
-  insert(key: string, name: string, cid: string, public_key: string, signature: string, message: string, enc: string) -> FdbResult
+  insert(data_key: string, alias: string, cid: string, public_key: string, signature: string, message: string, enc: string) -> FdbResult
   shutdown() -> FdbResult
   verify_signature(public_key: string, signature: string, message: string, enc: string) -> bool

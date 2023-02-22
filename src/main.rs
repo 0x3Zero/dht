@@ -57,8 +57,8 @@ pub fn shutdown() -> FdbResult {
 
 #[marine]
 pub fn insert(
-    key: String,
-    name: String,
+    data_key: String,
+    alias: String,
     cid: String,
     public_key: String,
     signature: String,
@@ -85,20 +85,20 @@ pub fn insert(
 
     // Check if PK and key exist
     let checker;
-    if name.is_empty() {
-      checker = get_record_by_pk_and_key(&conn, key.clone(), public_key.clone());
+    if alias.is_empty() {
+      checker = get_record_by_pk_and_key(&conn, data_key.clone(), public_key.clone());
     } else {
-      checker = get_record_by_pk_key_and_name(&conn, key.clone(), public_key.clone(), name.clone());
+      checker = get_record_by_pk_key_and_alias(&conn, data_key.clone(), public_key.clone(), alias.clone());
     }
     match checker {
         Ok(value) => {
+            let res;
             if value.is_none() {
-                let res = add_record(&conn, key, name, public_key, cid, enc_verify);
-                FdbResult::from_res(res)
+              res = add_record(&conn, data_key, alias, public_key, cid, enc_verify);
             } else {
-                let res = update_record(&conn, key, name, public_key, cid);
-                FdbResult::from_res(res)
+              res = update_record(&conn, data_key, alias, public_key, cid);               
             }
+            FdbResult::from_res(res)
         }
         Err(err) => FdbResult::from_err_str(&err.message.unwrap()),
     }
@@ -117,9 +117,9 @@ pub fn get_records_by_key(key: String) -> Vec<FdbDht> {
         match record {
             _ => dhts.push(FdbDht {
                 public_key: record.public_key.clone(),
-                name: record.name.clone(),
+                alias: record.alias.clone(),
                 cid: record.cid.clone(),
-                key: record.key.clone(),
+                data_key: record.data_key.clone(),
             }),
         }
     }
@@ -140,8 +140,8 @@ pub fn get_latest_record_by_pk_and_key(key: String, public_key: String) -> FdbDh
         let r = record.unwrap();
         fdb.public_key = r.public_key.clone();
         fdb.cid = r.cid.clone();
-        fdb.key = r.key.clone();
-        fdb.name = r.name.clone()
+        fdb.data_key = r.data_key.clone();
+        fdb.alias = r.alias.clone()
     }
 
     fdb
@@ -166,8 +166,8 @@ pub fn create_dht_table(conn: &Connection) -> Result<()> {
         "
   create table if not exists dht (
           uuid INTEGER not null primary key AUTOINCREMENT,
-          key TEXT not null,
-          name varchar(255) not null,
+          data_key TEXT not null,
+          alias varchar(255) not null,
           cid TEXT not null,
           owner_pk TEXT not null,
           enc varchar(20) not null
@@ -190,20 +190,20 @@ pub fn delete_dht_table(conn: &Connection) -> Result<()> {
 
 pub fn add_record(
     conn: &Connection,
-    key: String,
-    name: String,
+    data_key: String,
+    alias: String,
     owner_pk: String,
     cid: String,
     enc: String,
 ) -> Result<()> {
     conn.execute(format!(
-        "insert into dht (key, name, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
-        key, name, cid, owner_pk, enc
+        "insert into dht (data_key, alias, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
+        data_key, alias, cid, owner_pk, enc
     ))?;
 
     log::info!(
-        "insert into dht (key, name, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
-        key, name, cid, owner_pk, enc
+        "insert into dht (data_key, alias, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
+        data_key, alias, cid, owner_pk, enc
     );
 
     Ok(())
@@ -222,19 +222,19 @@ pub fn add_record(
 
 pub fn update_record(
     conn: &Connection,
-    key: String,
-    name: String,
+    data_key: String,
+    alias: String,
     owner_pk: String,
     cid: String,
 ) -> Result<()> {
     conn.execute(format!(
         "
       update dht
-      set name = '{}',
+      set alias = '{}',
       cid = '{}'
-      where owner_pk = '{}' AND key = '{}';
+      where owner_pk = '{}' AND data_key = '{}';
       ",
-        name, cid, owner_pk, key
+        alias, cid, owner_pk, data_key
     ))?;
 
     Ok(())
@@ -244,7 +244,7 @@ pub fn get_exact_record(conn: &Connection, key: String, pk: String) -> Result<Re
     read_execute(
         conn,
         format!(
-            "select * from dht where key = '{}' AND owner_pk = '{}';",
+            "select * from dht where data_key = '{}' AND owner_pk = '{}';",
             key, pk
         ),
     )
@@ -252,20 +252,26 @@ pub fn get_exact_record(conn: &Connection, key: String, pk: String) -> Result<Re
 
 pub fn get_records(conn: &Connection, key: String) -> Result<Vec<Record>> {
     let mut cursor = conn
-        .prepare(format!("select * from dht where key = '{}';", key))?
+        .prepare(format!("select * from dht where data_key = '{}' order by uuid desc;", key))?
         .cursor();
 
     let mut records = Vec::new();
+    let mut aliases = Vec::new();
+    
     while let Some(row) = cursor.next()? {
+      let alias = row[2].as_string().unwrap_or_default().to_string();
+      if !aliases.contains(&alias) {
         records.push(Record::from_row(row)?);
+        aliases.push(alias);
+      }
     }
 
     Ok(records)
 }
 
-pub fn get_record_by_pk(conn: &Connection, pk: String) -> Result<Option<Record>> {
+pub fn get_record_by_field(conn: &Connection, field: String, pk: String) -> Result<Option<Record>> {
     let mut cursor = conn
-        .prepare(format!("select * from dht where owner_pk = '{}';", pk))?
+        .prepare(format!("select * from dht where {} = '{}';", field, pk))?
         .cursor();
 
     let row = cursor.next()?;
@@ -284,7 +290,7 @@ pub fn get_record_by_pk_and_key(
 ) -> Result<Option<Record>> {
     let mut cursor = conn
         .prepare(format!(
-            "select * from dht where owner_pk = '{}' AND key = '{}';",
+            "select * from dht where owner_pk = '{}' AND data_key = '{}';",
             pk, key
         ))?
         .cursor();
@@ -298,7 +304,7 @@ pub fn get_record_by_pk_and_key(
     }
 }
 
-pub fn get_record_by_pk_key_and_name(
+pub fn get_record_by_pk_key_and_alias(
   conn: &Connection,
   key: String,
   pk: String,
@@ -306,7 +312,7 @@ pub fn get_record_by_pk_key_and_name(
 ) -> Result<Option<Record>> {
   let mut cursor = conn
       .prepare(format!(
-          "select * from dht where owner_pk = '{}' AND key = '{}' AND name = '{}';",
+          "select * from dht where owner_pk = '{}' AND data_key = '{}' AND alias = '{}';",
           pk, key, name
       ))?
       .cursor();
