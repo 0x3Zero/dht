@@ -2,20 +2,20 @@
 
 mod dht;
 mod ed25519;
-mod secp256k1;
 mod record;
 mod result;
+mod secp256k1;
 
 use marine_rs_sdk::marine;
 use marine_rs_sdk::module_manifest;
 use marine_rs_sdk::WasmLoggerBuilder;
 
 use dht::FdbDht;
-use ed25519::{verify as verify_ed25519};
-use secp256k1::{verify as verify_secp256k1};
+use ed25519::verify as verify_ed25519;
 use marine_sqlite_connector::{Connection, Error, Result};
 use record::Record;
 use result::FdbResult;
+use secp256k1::verify as verify_secp256k1;
 
 module_manifest!();
 
@@ -30,15 +30,20 @@ pub fn main() {
 }
 
 #[marine]
-pub fn verify_signature(public_key: String, signature: String, message: String, enc: String) -> bool{
-  let verify: bool;
-  if enc.is_empty() || enc == DEFAULT_ENC {
-    verify = verify_secp256k1(public_key.clone(), signature, message);
-  } else {
-    verify = verify_ed25519(public_key.clone(), signature, message);
-  }
+pub fn verify_signature(
+    public_key: String,
+    signature: String,
+    message: String,
+    enc: String,
+) -> bool {
+    let verify: bool;
+    if enc.is_empty() || enc == DEFAULT_ENC {
+        verify = verify_secp256k1(public_key.clone(), signature, message);
+    } else {
+        verify = verify_ed25519(public_key.clone(), signature, message);
+    }
 
-  verify
+    verify
 }
 
 #[marine]
@@ -65,16 +70,15 @@ pub fn insert(
     message: String,
     enc: String,
 ) -> FdbResult {
-  
     let verify: bool;
     let enc_verify: String;
 
     if enc.is_empty() || enc == DEFAULT_ENC {
-      verify = verify_secp256k1(public_key.clone(), signature, message);
-      enc_verify = DEFAULT_ENC.to_string();
+        verify = verify_secp256k1(public_key.clone(), signature, message);
+        enc_verify = DEFAULT_ENC.to_string();
     } else {
-      verify = verify_ed25519(public_key.clone(), signature, message);
-      enc_verify = enc;
+        verify = verify_ed25519(public_key.clone(), signature, message);
+        enc_verify = enc;
     }
 
     if !verify {
@@ -85,18 +89,24 @@ pub fn insert(
 
     // Check if PK and key exist
     let checker;
+    log::info!("{}", alias.is_empty());
     if alias.is_empty() {
-      checker = get_record_by_pk_and_key(&conn, data_key.clone(), public_key.clone());
+        checker = get_record_by_pk_and_key(&conn, data_key.clone(), public_key.clone());
     } else {
-      checker = get_record_by_pk_key_and_alias(&conn, data_key.clone(), public_key.clone(), alias.clone());
+        checker = get_record_by_pk_key_and_alias(
+            &conn,
+            data_key.clone(),
+            public_key.clone(),
+            alias.clone(),
+        );
     }
     match checker {
         Ok(value) => {
             let res;
             if value.is_none() {
-              res = add_record(&conn, data_key, alias, public_key, cid, enc_verify);
+                res = add_record(&conn, data_key, alias, public_key, cid, enc_verify);
             } else {
-              res = update_record(&conn, data_key, alias, public_key, cid);               
+                res = update_record(&conn, data_key, alias, public_key, cid);
             }
             FdbResult::from_res(res)
         }
@@ -252,18 +262,13 @@ pub fn get_exact_record(conn: &Connection, key: String, pk: String) -> Result<Re
 
 pub fn get_records(conn: &Connection, key: String) -> Result<Vec<Record>> {
     let mut cursor = conn
-        .prepare(format!("select * from dht where data_key = '{}' order by uuid desc;", key))?
+        .prepare(format!("select * from dht where data_key = '{}'", key))?
         .cursor();
 
     let mut records = Vec::new();
-    let mut aliases = Vec::new();
-    
+
     while let Some(row) = cursor.next()? {
-      let alias = row[2].as_string().unwrap_or_default().to_string();
-      if !aliases.contains(&alias) {
         records.push(Record::from_row(row)?);
-        aliases.push(alias);
-      }
     }
 
     Ok(records)
@@ -305,25 +310,25 @@ pub fn get_record_by_pk_and_key(
 }
 
 pub fn get_record_by_pk_key_and_alias(
-  conn: &Connection,
-  key: String,
-  pk: String,
-  name: String,
+    conn: &Connection,
+    key: String,
+    pk: String,
+    name: String,
 ) -> Result<Option<Record>> {
-  let mut cursor = conn
-      .prepare(format!(
-          "select * from dht where owner_pk = '{}' AND data_key = '{}' AND alias = '{}';",
-          pk, key, name
-      ))?
-      .cursor();
+    let mut cursor = conn
+        .prepare(format!(
+            "select * from dht where owner_pk = '{}' AND data_key = '{}' AND alias = '{}';",
+            pk, key, name
+        ))?
+        .cursor();
 
-  let row = cursor.next()?;
-  if row != None {
-      let found_record = Record::from_row(row.unwrap());
-      Ok(Some(found_record.unwrap()))
-  } else {
-      Ok(None)
-  }
+    let row = cursor.next()?;
+    if row != None {
+        let found_record = Record::from_row(row.unwrap());
+        Ok(Some(found_record.unwrap()))
+    } else {
+        Ok(None)
+    }
 }
 
 fn read_execute(conn: &Connection, statement: String) -> Result<Record> {
