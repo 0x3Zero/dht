@@ -5,9 +5,9 @@ use marine_rs_sdk::marine;
 #[derive(Debug, Default)]
 pub struct FdbDht {
     pub public_key: String,
-    pub name: String,
+    pub alias: String,
     pub cid: String,
-    pub key: String,
+    pub data_key: String,
 }
 
 #[marine]
@@ -54,9 +54,9 @@ impl From<Result<FdbDht>> for DhtGetResult {
                 error: err.to_string(),
                 data: FdbDht {
                     public_key: "".to_string(),
-                    name: "".to_string(),
+                    alias: "".to_string(),
                     cid: "".to_string(),
-                    key: "".to_string(),
+                    data_key: "".to_string(),
                 },
             },
         }

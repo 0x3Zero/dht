@@ -1,0 +1,7 @@
+{
+  "name": "dht",
+  "dependencies": [
+    "name:sqlite3",
+    "name:dht"
+  ]
+}
