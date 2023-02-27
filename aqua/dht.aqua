@@ -11,8 +11,10 @@ data FdbResult:
   err_msg: string
 
 service Dht("dht"):
+  fork(old_data_key: string, new_data_key: string, alias: string, public_key: string) -> FdbResult
   get_latest_record_by_pk_and_key(key: string, public_key: string) -> FdbDht
   get_records_by_key(key: string) -> []FdbDht
+  get_records_by_public_key(pk: string) -> []FdbDht
   initialize() -> FdbResult
   insert(data_key: string, alias: string, cid: string, public_key: string, signature: string, message: string, enc: string) -> FdbResult
   shutdown() -> FdbResult

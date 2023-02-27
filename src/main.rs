@@ -89,7 +89,7 @@ pub fn insert(
 
     // Check if PK and key exist
     let checker;
-    log::info!("{}", alias.is_empty());
+
     if alias.is_empty() {
         checker = get_record_by_pk_and_key(&conn, data_key.clone(), public_key.clone());
     } else {
@@ -119,7 +119,26 @@ pub fn get_records_by_key(key: String) -> Vec<FdbDht> {
     let conn = get_connection(DEFAULT_PATH);
     let records = get_records(&conn, key).unwrap();
 
-    log::info!("{:?}", records);
+    let mut dhts = Vec::new();
+
+    for record in records.iter() {
+        match record {
+            _ => dhts.push(FdbDht {
+                public_key: record.public_key.clone(),
+                alias: record.alias.clone(),
+                cid: record.cid.clone(),
+                data_key: record.data_key.clone(),
+            }),
+        }
+    }
+
+    dhts
+}
+
+#[marine]
+pub fn get_records_by_public_key(pk: String) -> Vec<FdbDht> {
+    let conn = get_connection(DEFAULT_PATH);
+    let records = get_record_by_public_key(&conn, pk).unwrap();
 
     let mut dhts = Vec::new();
 
@@ -155,6 +174,56 @@ pub fn get_latest_record_by_pk_and_key(key: String, public_key: String) -> FdbDh
     }
 
     fdb
+}
+
+#[marine]
+pub fn fork(
+    old_data_key: String,
+    new_data_key: String,
+    alias: String,
+    public_key: String,
+) -> FdbResult {
+    let conn = get_connection(DEFAULT_PATH);
+
+    // check if there is current record
+    let old_record = get_record_by_pk_key_and_alias(
+        &conn,
+        old_data_key.clone(),
+        public_key.clone(),
+        alias.clone(),
+    )
+    .unwrap();
+    if old_record.is_none() {
+        let warning = format!("There is no record for {}", old_data_key.clone());
+        return FdbResult::from_err_str(warning.as_str());
+    }
+
+    // Check if there is record for new key
+    let new_record = get_record_by_pk_key_and_alias(
+        &conn,
+        new_data_key.clone(),
+        public_key.clone(),
+        alias.clone(),
+    )
+    .unwrap();
+    if !new_record.is_none() {
+        let warning = format!("There is record for {}", new_data_key.clone());
+        return FdbResult::from_err_str(warning.as_str());
+    }
+
+    let destructure_old_record = old_record.unwrap();
+
+    // copy old_row to new_row
+    let res = add_record(
+        &conn,
+        new_data_key,
+        destructure_old_record.alias,
+        destructure_old_record.public_key,
+        destructure_old_record.cid,
+        destructure_old_record.enc,
+    );
+
+    FdbResult::from_res(res)
 }
 
 /************************ *********************/
@@ -211,24 +280,8 @@ pub fn add_record(
         data_key, alias, cid, owner_pk, enc
     ))?;
 
-    log::info!(
-        "insert into dht (data_key, alias, cid, owner_pk, enc) values ('{}', '{}', '{}', '{}', '{}');",
-        data_key, alias, cid, owner_pk, enc
-    );
-
     Ok(())
 }
-
-// pub fn get_all_dht_records(conn: &Connection) -> Result<Vec<Record>> {
-//     let mut cursor = conn.prepare("select * from dht;")?.cursor();
-
-//     let mut records = Vec::new();
-//     while let Some(row) = cursor.next()? {
-//         records.push(Record::from_row(row)?);
-//     }
-
-//     Ok(records)
-// }
 
 pub fn update_record(
     conn: &Connection,
@@ -329,6 +382,20 @@ pub fn get_record_by_pk_key_and_alias(
     } else {
         Ok(None)
     }
+}
+
+pub fn get_record_by_public_key(conn: &Connection, pk: String) -> Result<Vec<Record>> {
+    let mut cursor = conn
+        .prepare(format!("select * from dht where owner_pk = '{}';", pk))?
+        .cursor();
+
+    let mut records = Vec::new();
+
+    while let Some(row) = cursor.next()? {
+        records.push(Record::from_row(row)?);
+    }
+
+    Ok(records)
 }
 
 fn read_execute(conn: &Connection, statement: String) -> Result<Record> {
