@@ -293,11 +293,10 @@ pub fn update_record(
     conn.execute(format!(
         "
       update dht
-      set alias = '{}',
       cid = '{}'
-      where owner_pk = '{}' AND data_key = '{}';
+      where owner_pk = '{}' AND data_key = '{}' AND alias = '{}';
       ",
-        alias, cid, owner_pk, data_key
+        cid, owner_pk, data_key, alias
     ))?;
 
     Ok(())
