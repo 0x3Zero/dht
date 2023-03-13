@@ -93,6 +93,22 @@ pub fn insert(
     if alias.is_empty() {
         checker = get_record_by_pk_and_key(&conn, data_key.clone(), public_key.clone());
     } else {
+        let record = get_record_by_key_and_alias(
+            &conn, 
+            data_key.clone(), 
+            alias.clone(),
+        ).unwrap();
+
+        if !record.is_none() {
+          let r = record.unwrap();
+
+          if r.public_key.to_lowercase() != public_key.to_lowercase() {
+            let warning = format!("There is record for {} and {}", 
+              data_key.clone(), alias.clone());
+            return FdbResult::from_err_str(warning.as_str());
+          }
+        }
+
         checker = get_record_by_pk_key_and_alias(
             &conn,
             data_key.clone(),
@@ -381,6 +397,27 @@ pub fn get_record_by_pk_key_and_alias(
     } else {
         Ok(None)
     }
+}
+
+pub fn get_record_by_key_and_alias(
+  conn: &Connection,
+  key: String,
+  name: String,
+) -> Result<Option<Record>> {
+  let mut cursor = conn
+      .prepare(format!(
+          "select * from dht where data_key = '{}' AND alias = '{}';",
+          key, name
+      ))?
+      .cursor();
+
+  let row = cursor.next()?;
+  if row != None {
+      let found_record = Record::from_row(row.unwrap());
+      Ok(Some(found_record.unwrap()))
+  } else {
+      Ok(None)
+  }
 }
 
 pub fn get_record_by_public_key(conn: &Connection, pk: String) -> Result<Vec<Record>> {
